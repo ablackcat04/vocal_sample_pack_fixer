@@ -1,0 +1,6 @@
+[package]
+name = "vocal_sample_pack_fixer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
