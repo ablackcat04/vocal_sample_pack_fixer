@@ -1,4 +1,5 @@
 use core::f32;
+use std::{fs, io, path::{Path, PathBuf}};
 
 use hound;
 extern crate queues;
@@ -7,23 +8,50 @@ use queues::*;
 const ACTIVE_RATE: f32 = 0.015;
 const ACTIVE_RATIO: f32 = 0.15;
 const SAMPLES_PER_BLOCK: usize = 400;
-const TEMP_ROOT_FOLDER_FOR_SAMPLES :&str = "samples/";
 
 fn find_first_valid(peak: f32, v: &Vec<f32>) -> usize {
     v.iter().enumerate().filter(|(_, x)| **x > peak*ACTIVE_RATE).take(1)
         .next().expect("This should work since it's the first and only call of next()").0
 }
 
-pub fn process_file(path: &str) -> Result<(), String> {
-    let in_path = String::from(TEMP_ROOT_FOLDER_FOR_SAMPLES) + path;
-    println!("Processing {}", in_path);
-    let mut reader = hound::WavReader::open(&in_path)
-        .map_err(|_| format!("Failed to open {in_path}, maybe the file name is incorrect"))?;
+pub fn get_and_prepare_all_file_path(root: &Path, skip: usize) -> io::Result<Vec<PathBuf>> {
+    let mut entries = fs::read_dir(root)?
+        .map(|res| res.map(|e| e.path()))
+        .filter(|e| e.as_ref().unwrap().is_file())
+        .collect::<Result<Vec<_>, io::Error>>()?;
+
+    let sub_dirs = fs::read_dir(root)?
+        .map(|res| res.map(|e| e.path()))
+        .filter(|e| e.as_ref().unwrap().is_dir())
+        .collect::<Result<Vec<_>, io::Error>>()?;
+
+    for sub_dir in sub_dirs {
+        let mut output_sub_dir = PathBuf::from("./outputs");
+        output_sub_dir.extend(sub_dir.iter().skip(skip));
+
+        if !output_sub_dir.exists() {
+            match fs::create_dir(&output_sub_dir) {
+                Ok(_) => {}
+                Err(_) => {println!("Failed to create sub directory {:?}", output_sub_dir)}
+            }
+        }
+
+        entries.append(&mut get_and_prepare_all_file_path(&sub_dir, skip).unwrap());
+    }
+
+    Ok(entries)
+}
+
+
+pub fn process_file(path: PathBuf, root: &Path) -> Result<(), String> {
+    println!("Processing {:?}", path);
+    let mut reader = hound::WavReader::open(&path)
+        .map_err(|_| format!("Failed to open {:?}, maybe the file name is incorrect", path))?;
 
     let samples = reader.samples::<f32>();
 
     let samples: Vec<f32> = samples
-        .map(|x| x.map_err(|_| format!("The wave file is broken at {in_path}"))) // Propagate the error with a custom message
+        .map(|x| x.map_err(|_| format!("The wave file is broken at {:?}", path))) // Propagate the error with a custom message
         .collect::<Result<_, _>>()?;
 
     let peak = *samples.iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)).unwrap_or(&1.0);
@@ -36,7 +64,7 @@ pub fn process_file(path: &str) -> Result<(), String> {
     q.add(first).expect("Adding an element to a quene should be fine");
 
     let mut last = first;
-    let mut start = 0;
+    let mut start;
 
     loop {
         start = q.remove().expect("This is fine");
@@ -78,7 +106,14 @@ pub fn process_file(path: &str) -> Result<(), String> {
     
     println!("start at {}s", start as f32 / 48000.0 / reader.spec().channels as f32);
 
-    let mut writer = hound::WavWriter::create(String::from("outputs/") + path, reader.spec().clone())
+    let skip = root.iter().count();
+
+    let mut output_path = PathBuf::from("./outputs");
+    output_path.extend(path.iter().skip(skip));
+
+    println!("output path = {:?}", output_path);
+
+    let mut writer = hound::WavWriter::create(output_path, reader.spec().clone())
         .map_err(|e| format!("{e}"))?;
 
     let (fade_start, fade_len) = if start < 400 {
