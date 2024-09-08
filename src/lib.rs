@@ -43,8 +43,10 @@ pub fn get_and_prepare_all_file_path(root: &Path, skip: usize) -> io::Result<Vec
 }
 
 
-pub fn process_file(path: PathBuf, root: &Path) -> Result<(), String> {
-    println!("Processing {:?}", path);
+pub fn process_file(path: PathBuf, skip: usize) -> Result<(), String> {
+    let mut infos: Vec<String> = Vec::new();
+    infos.push(format!("Processing {:?}", path));
+
     let mut reader = hound::WavReader::open(&path)
         .map_err(|_| format!("Failed to open {:?}, maybe the file name is incorrect", path))?;
 
@@ -56,7 +58,7 @@ pub fn process_file(path: PathBuf, root: &Path) -> Result<(), String> {
 
     let peak = *samples.iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)).unwrap_or(&1.0);
 
-    println!("peak = {}", peak);
+    infos.push(format!("peak = {}", peak));
 
     let first = find_first_valid(peak, &samples);
 
@@ -104,14 +106,12 @@ pub fn process_file(path: PathBuf, root: &Path) -> Result<(), String> {
     let start_sample_channel = start % reader.spec().channels as usize;
     start -= start_sample_channel;
     
-    println!("start at {}s", start as f32 / 48000.0 / reader.spec().channels as f32);
-
-    let skip = root.iter().count();
+    infos.push(format!("start at {}s", start as f32 / 48000.0 / reader.spec().channels as f32));
 
     let mut output_path = PathBuf::from("./outputs");
     output_path.extend(path.iter().skip(skip));
 
-    println!("output path = {:?}", output_path);
+    infos.push(format!("output path = {:?}", output_path));
 
     let mut writer = hound::WavWriter::create(output_path, reader.spec().clone())
         .map_err(|e| format!("{e}"))?;
@@ -134,5 +134,9 @@ pub fn process_file(path: PathBuf, root: &Path) -> Result<(), String> {
 
     writer.finalize().map_err(|e| format!("{e}"))?;
 
+    infos.push(String::from(""));
+    for info in infos {
+        println!("{info}");
+    }
     Ok(())
 }
