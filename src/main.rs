@@ -1,27 +1,4 @@
-use std::{env::args, path::{Path, PathBuf}, thread};
-
-fn split_path(all_path: Vec<PathBuf>) -> Vec<Vec<PathBuf>> {
-    let num_cores = num_cpus::get();
-    println!("Number of CPU cores: {}", num_cores);
-    let total_tasks = all_path.iter().count();
-    let num_thread_spawning = if num_cores * 2 < total_tasks {
-        num_cores * 2
-    } else {
-        total_tasks
-    };    // I/O intensive program, spawn more threads
-    
-    let mut v: Vec<Vec<PathBuf>> = Vec::new();
-    for _ in 0..num_thread_spawning {
-        v.push(Vec::new());
-    }
-    
-    for (mut thread, path) in all_path.into_iter().enumerate() {
-        thread %= num_thread_spawning;
-        v[thread].push(path);
-    }
-    
-    v
-}
+use std::{env::args, path::Path, thread};
 
 fn main() {
     let start = std::time::Instant::now();
@@ -38,8 +15,6 @@ fn main() {
         root_path += &arg;
     }
 
-    println!("root = {:?}", root_path);
-
     let root_path = Path::new(&root_path);
 
     let skip = root_path.iter().count();
@@ -47,11 +22,7 @@ fn main() {
     let all_file_path = vocal_sample_pack_fixer::get_and_prepare_all_file_path(root_path, skip)
         .expect(format!("Doesn't find any file in {:?}", root_path).as_str());
 
-    println!("{:?}", all_file_path);
-
-    let splited_path: Vec<Vec<PathBuf>> = split_path(all_file_path);
-
-    println!("{:#?}", splited_path);
+    let splited_path = vocal_sample_pack_fixer::split_task(all_file_path);
 
     let mut handles = vec![];
 
