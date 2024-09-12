@@ -113,8 +113,8 @@ fn find_start(samples: &Vec<f32>, peak: f32, channels: u16) -> usize {
 
 pub fn process_file(path: PathBuf, skip: usize) -> Result<(), String> {
     // use this to log messeges at once, since this is a multi-thread program
-    let mut infos: Vec<String> = Vec::new();
-    infos.push(format!("Processing {:?}", path));
+    let mut infos: String = String::new();
+    infos += format!("Processing {:?}\n", path).as_str();
 
     let mut reader = hound::WavReader::open(&path)
         .map_err(|_| format!("Failed to open {:?}, maybe the file name is incorrect", path))?;
@@ -124,14 +124,14 @@ pub fn process_file(path: PathBuf, skip: usize) -> Result<(), String> {
         .collect::<Result<_, _>>()?;
 
     let peak = *samples.iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less)).unwrap_or(&1.0);
-    infos.push(format!("peak = {}", peak));
+    infos += format!("peak = {}\n", peak).as_str();
 
     let start = find_start(&samples, peak, reader.spec().channels);
-    infos.push(format!("start at {}s", start as f32 / 48000.0 / reader.spec().channels as f32));
+    infos += format!("start at {}s\n", start as f32 / 48000.0 / reader.spec().channels as f32).as_str();
 
-    let mut output_path = PathBuf::from("./outputs");
+    let mut output_path = PathBuf::from("outputs");
     output_path.extend(path.iter().skip(skip)); // add relative path after outputs
-    infos.push(format!("output path = {:?}", output_path));
+    infos += format!("output path = {:?}\n", output_path).as_str();
 
     let mut writer = hound::WavWriter::create(output_path, reader.spec().clone())
         .map_err(|e| format!("{e}"))?;
@@ -155,9 +155,6 @@ pub fn process_file(path: PathBuf, skip: usize) -> Result<(), String> {
 
     writer.finalize().map_err(|e| format!("{e}"))?;
 
-    infos.push(String::from(""));
-    for info in infos {
-        println!("{info}");
-    }
+    println!("{infos}");
     Ok(())
 }
