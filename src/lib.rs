@@ -37,6 +37,15 @@ pub fn split_task<T>(all_path: Vec<T>) -> Vec<Vec<T>> {
 
 
 pub fn get_and_prepare_all_file_path(root: &Path, skip: usize) -> io::Result<Vec<PathBuf>> {
+    let output_dir = Path::new("./outputs");
+
+    if !output_dir.exists() {
+        match fs::create_dir(&output_dir) {
+            Ok(_) => {}
+            Err(_) => {println!("Failed to create output directory {:?}", output_dir)}
+        }
+    }
+
     let mut entries = fs::read_dir(root)?
         .map(|res| res.map(|e| e.path()))
         .filter(|e| e.as_ref().unwrap().is_file())
